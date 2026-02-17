@@ -1,9 +1,0 @@
-{
-  "name": "Bengali Translator",
-  "short_name": "Translator",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#4e73df",
-  "theme_color": "#4e73df",
-  "icons": []
-}
