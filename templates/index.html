@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bengali → English Translator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+
+    <style>
+        body{
+            margin:0;
+            font-family:Arial, sans-serif;
+            background:linear-gradient(135deg,#4e73df,#1cc88a);
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            min-height:100vh;
+        }
+
+        .card{
+            background:white;
+            width:95%;
+            max-width:420px;
+            padding:20px;
+            border-radius:16px;
+            text-align:center;
+            box-shadow:0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        input,button{
+            width:100%;
+            padding:12px;
+            margin-top:10px;
+            border:none;
+            border-radius:8px;
+            font-size:15px;
+        }
+
+        button{
+            background:#4e73df;
+            color:white;
+            font-weight:bold;
+            cursor:pointer;
+        }
+
+        .voice-btn{ background:#1cc88a; }
+        .reset-btn{ background:#e74a3b; }
+        .copy-btn{ background:#36b9cc; }
+
+        .loader{
+            display:none;
+            margin-top:12px;
+            font-weight:bold;
+            color:#555;
+        }
+
+        audio{
+            width:100%;
+            margin-top:5px;
+        }
+
+        #error{
+            color:red;
+            font-size:14px;
+            margin-top:8px;
+        }
+
+        /* ---------- Splash Screen ---------- */
+        #splash{
+            position:fixed;
+            top:0;
+            left:0;
+            width:100%;
+            height:100%;
+            background:#4e73df;
+            display:flex;
+            flex-direction:column;
+            justify-content:center;
+            align-items:center;
+            color:white;
+            z-index:9999;
+            transition:opacity 0.5s ease;
+        }
+
+        #splash img{
+            width:90px;
+            margin-bottom:15px;
+        }
+
+        #splash h2{
+            margin:0;
+            font-size:24px;
+            font-weight:bold;
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- Splash Screen -->
+<div id="splash">
+    <img src="/static/icon.png" alt="Logo">
+    <h2>Bengali Translator</h2>
+</div>
+
+<div class="card">
+
+    <h2>🌐 Bengali → English</h2>
+
+    <input id="textInput" placeholder="Type Bengali text">
+
+    <button onclick="translateText()">Translate Text</button>
+
+    <button class="voice-btn" onclick="startVoice()">
+        🎤 Speak Bengali
+    </button>
+
+    <button class="reset-btn" onclick="resetAll()">
+        🔄 Reset
+    </button>
+
+    <div class="loader" id="loader">Processing...</div>
+
+    <div id="error"></div>
+
+    <h4>Bengali</h4>
+    <p id="bn"></p>
+    <audio id="bn_audio" controls></audio>
+
+    <h4>English</h4>
+    <p id="en"></p>
+
+    <button class="copy-btn" onclick="copyEnglish()">📋 Copy English</button>
+
+    <audio id="en_audio" controls></audio>
+
+</div>
+
+<script>
+
+/* ---------- SPLASH SCREEN ---------- */
+window.onload = function(){
+    setTimeout(()=>{
+        const splash = document.getElementById("splash");
+        splash.style.opacity = "0";
+        setTimeout(()=> splash.style.display="none", 500);
+    },1500);
+};
+
+function showLoader(show){
+    document.getElementById("loader").style.display =
+        show ? "block" : "none";
+    document.getElementById("error").innerText = "";
+}
+
+/* ---------- TEXT TRANSLATION ---------- */
+function translateText(){
+
+    let text = document.getElementById("textInput").value;
+
+    if(text.trim()===""){
+        document.getElementById("error").innerText =
+            "Please enter text.";
+        return;
+    }
+
+    showLoader(true);
+
+    let formData = new FormData();
+    formData.append("text", text);
+
+    fetch("/translate_text",{
+        method:"POST",
+        body:formData
+    })
+    .then(res=>res.json())
+    .then(data=>{
+        showLoader(false);
+
+        if(data.error){
+            document.getElementById("error").innerText=data.error;
+            return;
+        }
+
+        document.getElementById("bn").innerText=data.bengali;
+        document.getElementById("en").innerText=data.english;
+
+        document.getElementById("bn_audio").src=data.bn_audio;
+        document.getElementById("en_audio").src=data.en_audio;
+
+        // Auto play English voice
+        document.getElementById("en_audio").play();
+    });
+}
+
+/* ---------- MOBILE VOICE INPUT ---------- */
+function startVoice(){
+
+    const SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
+
+    if(!SpeechRecognition){
+        alert("Speech recognition not supported in this browser.");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+
+    recognition.lang = "bn-BD";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    showLoader(true);
+    recognition.start();
+
+    recognition.onresult = function(event){
+        const bengaliText = event.results[0][0].transcript;
+        document.getElementById("textInput").value = bengaliText;
+        translateText();
+    };
+
+    recognition.onerror = function(event){
+        showLoader(false);
+        document.getElementById("error").innerText =
+            "Mic error: " + event.error;
+    };
+}
+
+/* ---------- RESET ---------- */
+function resetAll(){
+
+    document.getElementById("textInput").value="";
+    document.getElementById("bn").innerText="";
+    document.getElementById("en").innerText="";
+    document.getElementById("error").innerText="";
+
+    let bnAudio=document.getElementById("bn_audio");
+    let enAudio=document.getElementById("en_audio");
+
+    bnAudio.pause();
+    enAudio.pause();
+
+    bnAudio.src="";
+    enAudio.src="";
+}
+
+/* ---------- COPY ---------- */
+function copyEnglish(){
+    const text=document.getElementById("en").innerText;
+    navigator.clipboard.writeText(text);
+    alert("English text copied!");
+}
+
+/* ---------- OFFLINE ALERT ---------- */
+window.addEventListener("offline", ()=>{
+    alert("No internet connection.");
+});
+
+</script>
+
+</body>
+</html>
